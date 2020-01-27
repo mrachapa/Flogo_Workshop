@@ -1,0 +1,469 @@
+{
+    "imports": [
+        "github.com/project-flogo/flow",
+        "github.com/project-flogo/grpc/activity/grpc",
+        "git.tibco.com/git/product/ipaas/wi-contrib.git/contributions/General/activity/rest",
+        "github.com/project-flogo/contrib/activity/actreturn",
+        "github.com/project-flogo/graphql/trigger/graphql",
+        "github.com/project-flogo/contrib/function/coerce"
+    ],
+    "name": "Books",
+    "description": " ",
+    "version": "1.1.0",
+    "type": "flogo:app",
+    "appModel": "1.1.1",
+    "triggers": [
+        {
+            "ref": "#graphql",
+            "name": "tibco-graphql",
+            "description": "Simple GraphQL Trigger",
+            "settings": {
+                "port": 7879,
+                "path": "/graphql",
+                "schemaFile": {
+                    "filename": "bookstore.graphql",
+                    "content": "data:application/octet-stream;base64,c2NoZW1hIHsKICBxdWVyeTogYm9va2RldGFpbHMKfQoKdHlwZSBib29rZGV0YWlscyB7CiAgICBCb29rKGlkOkludCEsIGN1cnJlbmN5OkN1cnJlbmN5KTogQm9vawp9CgplbnVtIEN1cnJlbmN5IHsKICAgIFVTRAogICAgRVVSCiAgICBJTlIKfQoKdHlwZSBCb29rIHsKICAgIGlkOiBJbnQKICAgIGlzYm46IEludAogICAgYXV0aG9yOiBTdHJpbmcKICAgIHRpdGxlOiBTdHJpbmcKICAgIHB1YmxpY2F0aW9uX3llYXI6IEludAogICAgcHJpY2U6IEZsb2F0CiAgICByYXRpbmc6IFJhdGluZwp9Cgp0eXBlIFJhdGluZyB7CiAgICBhdmVyYWdlX3JhdGluZzogRmxvYXQKICAgIHJhdGluZ3NfY291bnQ6IEludAp9"
+                },
+                "secureConnection": false,
+                "serverKey": "",
+                "caCertificate": "",
+                "graphqlSchema": "schema {\n  query: bookdetails\n}\n\ntype bookdetails {\n    Book(id:Int!, currency:Currency): Book\n}\n\nenum Currency {\n    USD\n    EUR\n    INR\n}\n\ntype Book {\n    id: Int\n    isbn: Int\n    author: String\n    title: String\n    publication_year: Int\n    price: Float\n    rating: Rating\n}\n\ntype Rating {\n    average_rating: Float\n    ratings_count: Int\n}"
+            },
+            "id": "GraphQLTrigger",
+            "handlers": [
+                {
+                    "description": "Query book details",
+                    "settings": {
+                        "operation": "Query",
+                        "resolverFor": "Book"
+                    },
+                    "action": {
+                        "ref": "github.com/project-flogo/flow",
+                        "settings": {
+                            "flowURI": "res://flow:Query_Book"
+                        },
+                        "input": {
+                            "arguments": "=$.arguments"
+                        },
+                        "output": {
+                            "data": "=$.data"
+                        }
+                    },
+                    "schemas": {
+                        "reply": {
+                            "data": {
+                                "type": "json",
+                                "value": "{\"type\":\"object\",\"properties\":{\"Book\":{\"type\":\"object\",\"required\":[],\"properties\":{\"id\":{\"type\":\"number\"},\"isbn\":{\"type\":\"number\"},\"author\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"publication_year\":{\"type\":\"number\"},\"price\":{\"type\":\"number\"},\"rating\":{\"type\":\"object\",\"required\":[],\"properties\":{\"average_rating\":{\"type\":\"number\"},\"ratings_count\":{\"type\":\"number\"}}}}}},\"required\":[]}",
+                                "fe_metadata": "{\"type\":\"object\",\"properties\":{\"Book\":{\"type\":\"object\",\"required\":[],\"properties\":{\"id\":{\"type\":\"number\"},\"isbn\":{\"type\":\"number\"},\"author\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"publication_year\":{\"type\":\"number\"},\"price\":{\"type\":\"number\"},\"rating\":{\"type\":\"object\",\"required\":[],\"properties\":{\"average_rating\":{\"type\":\"number\"},\"ratings_count\":{\"type\":\"number\"}}}}}},\"required\":[]}"
+                            }
+                        },
+                        "output": {
+                            "arguments": {
+                                "type": "json",
+                                "value": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"}},\"required\":[\"id\"]}",
+                                "fe_metadata": "{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"}},\"required\":[\"id\"]}"
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    ],
+    "resources": [
+        {
+            "id": "flow:Query_Book",
+            "data": {
+                "name": "Query_Book",
+                "description": "Query book details",
+                "links": [
+                    {
+                        "id": 1,
+                        "from": "GetBookInfo_gRPC",
+                        "to": "GetBookRating_REST",
+                        "type": "default"
+                    },
+                    {
+                        "id": 2,
+                        "from": "GetBookRating_REST",
+                        "to": "GetCurrencyConverter",
+                        "type": "expression",
+                        "label": "GetBookRating_RESTto",
+                        "value": "$activity[GetBookRating_REST].statusCode == 200 && $flow.arguments.currency != \"USD\""
+                    },
+                    {
+                        "id": 3,
+                        "from": "GetCurrencyConverter",
+                        "to": "Return_CurrencyConversion",
+                        "type": "default"
+                    },
+                    {
+                        "id": 4,
+                        "from": "GetCurrencyConverter",
+                        "to": "Return",
+                        "type": "error",
+                        "label": "InvokeRESTService to Return"
+                    },
+                    {
+                        "id": 5,
+                        "from": "GetBookRating_REST",
+                        "to": "Return_DefaultCurrency",
+                        "type": "expression",
+                        "label": "GetBookRating_RESTtoReturn",
+                        "value": "$activity[GetBookRating_REST].statusCode == 200 && ($flow.arguments.currency == null || $flow.arguments.currency == \"USD\")"
+                    },
+                    {
+                        "id": 6,
+                        "from": "GetBookRating_REST",
+                        "to": "Return_RESTError",
+                        "type": "error",
+                        "label": "GetBookRating_RESTtoReturn1"
+                    },
+                    {
+                        "id": 7,
+                        "from": "GetBookInfo_gRPC",
+                        "to": "Return_gRPCError",
+                        "type": "error",
+                        "label": "GetBookInfo_gRPCto"
+                    }
+                ],
+                "tasks": [
+                    {
+                        "id": "GetBookInfo_gRPC",
+                        "name": "GetBookInfo_gRPC",
+                        "description": "GRPC Activity",
+                        "activity": {
+                            "ref": "#grpc",
+                            "settings": {
+                                "operatingMode": "grpc-to-grpc",
+                                "hosturl": "=$property[\"BOOKINFO_GRPC_SERVER\"]",
+                                "enableTLS": false,
+                                "clientCert": "",
+                                "protoFile": {
+                                    "filename": "bookinfo.proto",
+                                    "content": "data:application/octet-stream;base64,c3ludGF4ID0gInByb3RvMyI7CgpwYWNrYWdlIGJvb2tpbmZvOwoKLy8gQm9va2luZm8gc2VydmljZSBkZWZpbml0aW9uLgpzZXJ2aWNlIEJvb2tJbmZvIHsKICAvLyBHZXQgYm9vayBkZXRhaWxzIGJ5IGlkCiAgcnBjIEdldEJvb2tieUlkIChCb29rUmVxdWVzdCkgcmV0dXJucyAoQm9va1Jlc3BvbnNlKSB7fQp9CgovLyBUaGUgcmVxdWVzdCBtZXNzYWdlIGNvbnRhaW5pbmcgdGhlIGJvb2sncyBpZC4KbWVzc2FnZSBCb29rUmVxdWVzdCB7CiAgaW50NjQgaWQgPSAxOwp9CgovLyBUaGUgcmVzcG9uc2UgbWVzc2FnZSBjb250YWluaW5nIHRoZSBib29rJ3MgZGV0YWlscwptZXNzYWdlIEJvb2tSZXNwb25zZSB7CiAgaW50NjQgaWQgPSAxOwogIGludDY0IGlzYm4gPSAyOwogIHN0cmluZyBhdXRob3IgPSAzOwogIHN0cmluZyB0aXRsZSA9IDQ7CiAgaW50NjQgcHVibGljYXRpb25feWVhciA9IDU7CiAgZmxvYXQgcHJpY2VfdXNkICA9IDY7Cn0K"
+                                }
+                            },
+                            "input": {
+                                "header": "",
+                                "serviceName": "BookInfo",
+                                "protoName": "bookinfo.proto",
+                                "methodName": "GetBookbyId",
+                                "params": "",
+                                "queryParams": "",
+                                "pathParams": "",
+                                "grpcMthdParamtrs": {
+                                    "mapping": {
+                                        "id": "=$flow.arguments.id"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "GetBookRating_REST",
+                        "name": "GetBookRating_REST",
+                        "description": "Simple REST Activity",
+                        "settings": {
+                            "retryOnError": {
+                                "count": 0,
+                                "interval": 0
+                            }
+                        },
+                        "activity": {
+                            "ref": "#rest",
+                            "input": {
+                                "Method": "GET",
+                                "Uri": "=$property[\"RATINGS_REST_URL\"]",
+                                "Timeout": 0,
+                                "requestType": "application/json",
+                                "Use certificate for verification": false,
+                                "Server Certificate": "",
+                                "proxy": "",
+                                "pathParams": {
+                                    "mapping": {
+                                        "bookid": "=coerce.toString($flow.arguments.id)"
+                                    }
+                                }
+                            },
+                            "output": {
+                                "configureResponseCodes": false,
+                                "responseType": "application/json"
+                            },
+                            "schemas": {
+                                "input": {
+                                    "pathParams": {
+                                        "type": "json",
+                                        "value": "{\"type\":\"object\",\"properties\":{\"bookid\":{\"type\":\"string\"}},\"required\":[]}",
+                                        "fe_metadata": "[{\"parameterName\":\"bookid\",\"type\":\"string\"}]"
+                                    },
+                                    "headers": {
+                                        "type": "json",
+                                        "value": "{\"type\":\"object\",\"properties\":{\"Accept\":{\"type\":\"string\",\"visible\":false},\"Accept-Charset\":{\"type\":\"string\",\"visible\":false},\"Accept-Encoding\":{\"type\":\"string\",\"visible\":false},\"Content-Type\":{\"type\":\"string\",\"visible\":false},\"Content-Length\":{\"type\":\"string\",\"visible\":false},\"Connection\":{\"type\":\"string\",\"visible\":false},\"Cookie\":{\"type\":\"string\",\"visible\":false},\"Pragma\":{\"type\":\"string\",\"visible\":false}},\"required\":[]}",
+                                        "fe_metadata": "[{\"parameterName\":\"Accept\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Charset\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Encoding\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Type\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Length\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Connection\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Cookie\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Pragma\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false}]"
+                                    }
+                                },
+                                "output": {
+                                    "responseBody": {
+                                        "type": "json",
+                                        "value": "{\"$schema\":\"http://json-schema.org/draft-04/schema#\",\"type\":\"object\",\"properties\":{\"average_rating\":{\"type\":\"number\"},\"book_id\":{\"type\":\"number\"},\"ratings_count\":{\"type\":\"number\"}}}",
+                                        "fe_metadata": "{\n  \"average_rating\": 4.34,\n  \"book_id\": 1,\n  \"ratings_count\": 4780653\n}"
+                                    },
+                                    "headers": {
+                                        "type": "json",
+                                        "value": "{\"type\":\"object\",\"properties\":{\"Accept\":{\"type\":\"string\",\"visible\":false},\"Accept-Charset\":{\"type\":\"string\",\"visible\":false},\"Accept-Encoding\":{\"type\":\"string\",\"visible\":false},\"Content-Type\":{\"type\":\"string\",\"visible\":false},\"Content-Length\":{\"type\":\"string\",\"visible\":false},\"Connection\":{\"type\":\"string\",\"visible\":false},\"Cookie\":{\"type\":\"string\",\"visible\":false},\"Pragma\":{\"type\":\"string\",\"visible\":false}},\"required\":[]}",
+                                        "fe_metadata": "[{\"parameterName\":\"Accept\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Charset\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Encoding\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Type\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Length\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Connection\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Cookie\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Pragma\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false}]"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "GetCurrencyConverter",
+                        "name": "GetCurrencyConverter",
+                        "description": "Simple REST Activity",
+                        "settings": {
+                            "retryOnError": {
+                                "count": 0,
+                                "interval": 0
+                            }
+                        },
+                        "activity": {
+                            "ref": "#rest",
+                            "input": {
+                                "Method": "GET",
+                                "Uri": "=$property[\"CURRENCY_REST_URL\"]",
+                                "Timeout": 0,
+                                "requestType": "application/json",
+                                "Use certificate for verification": false,
+                                "Server Certificate": "",
+                                "proxy": "",
+                                "queryParams": {
+                                    "mapping": {
+                                        "currency_code": "=$flow.arguments.currency",
+                                        "price_usd": "=$activity[GetBookInfo_gRPC].body.price_usd"
+                                    }
+                                }
+                            },
+                            "output": {
+                                "configureResponseCodes": false,
+                                "responseType": "application/json"
+                            },
+                            "schemas": {
+                                "input": {
+                                    "queryParams": {
+                                        "type": "json",
+                                        "value": "{\"type\":\"object\",\"properties\":{\"price_usd\":{\"type\":\"number\"},\"currency_code\":{\"type\":\"string\"}},\"required\":[]}",
+                                        "fe_metadata": "[{\"parameterName\":\"price_usd\",\"type\":\"number\",\"repeating\":\"\",\"required\":\"\"},{\"parameterName\":\"currency_code\",\"type\":\"string\",\"repeating\":\"\",\"required\":\"\"}]"
+                                    },
+                                    "headers": {
+                                        "type": "json",
+                                        "value": "{\"type\":\"object\",\"properties\":{\"Accept\":{\"type\":\"string\",\"visible\":false},\"Accept-Charset\":{\"type\":\"string\",\"visible\":false},\"Accept-Encoding\":{\"type\":\"string\",\"visible\":false},\"Content-Type\":{\"type\":\"string\",\"visible\":false},\"Content-Length\":{\"type\":\"string\",\"visible\":false},\"Connection\":{\"type\":\"string\",\"visible\":false},\"Cookie\":{\"type\":\"string\",\"visible\":false},\"Pragma\":{\"type\":\"string\",\"visible\":false}},\"required\":[]}",
+                                        "fe_metadata": "[{\"parameterName\":\"Accept\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Charset\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Encoding\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Type\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Length\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Connection\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Cookie\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Pragma\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false}]"
+                                    }
+                                },
+                                "output": {
+                                    "responseBody": {
+                                        "type": "json",
+                                        "value": "{\"$schema\":\"http://json-schema.org/draft-04/schema#\",\"type\":\"object\",\"properties\":{\"price\":{\"type\":\"number\"}}}",
+                                        "fe_metadata": "{\r\n    \"price\": 142.63\r\n}"
+                                    },
+                                    "headers": {
+                                        "type": "json",
+                                        "value": "{\"type\":\"object\",\"properties\":{\"Accept\":{\"type\":\"string\",\"visible\":false},\"Accept-Charset\":{\"type\":\"string\",\"visible\":false},\"Accept-Encoding\":{\"type\":\"string\",\"visible\":false},\"Content-Type\":{\"type\":\"string\",\"visible\":false},\"Content-Length\":{\"type\":\"string\",\"visible\":false},\"Connection\":{\"type\":\"string\",\"visible\":false},\"Cookie\":{\"type\":\"string\",\"visible\":false},\"Pragma\":{\"type\":\"string\",\"visible\":false}},\"required\":[]}",
+                                        "fe_metadata": "[{\"parameterName\":\"Accept\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Charset\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Accept-Encoding\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Type\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Content-Length\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Connection\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Cookie\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false},{\"parameterName\":\"Pragma\",\"type\":\"string\",\"repeating\":\"false\",\"required\":\"false\",\"visible\":false}]"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "Return_CurrencyConversion",
+                        "name": "Return_CurrencyConversion",
+                        "description": "Simple Return Activity",
+                        "activity": {
+                            "ref": "#actreturn",
+                            "settings": {
+                                "mappings": {
+                                    "data": {
+                                        "mapping": {
+                                            "Book": {
+                                                "id": "=$activity[GetBookInfo_gRPC].body.id",
+                                                "isbn": "=$activity[GetBookInfo_gRPC].body.isbn",
+                                                "author": "=$activity[GetBookInfo_gRPC].body.author",
+                                                "title": "=$activity[GetBookInfo_gRPC].body.title",
+                                                "publication_year": "=$activity[GetBookInfo_gRPC].body.publication_year",
+                                                "rating": {
+                                                    "average_rating": "=coerce.toFloat64($activity[GetBookRating_REST].responseBody.average_rating)",
+                                                    "ratings_count": "=coerce.toInt($activity[GetBookRating_REST].responseBody.ratings_count)"
+                                                },
+                                                "price": "=$activity[GetCurrencyConverter].responseBody.price"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "Return",
+                        "name": "Return",
+                        "description": "Simple Return Activity",
+                        "activity": {
+                            "ref": "#actreturn",
+                            "settings": {
+                                "mappings": {
+                                    "data": {
+                                        "mapping": {
+                                            "Book": {
+                                                "id": "=$activity[GetBookInfo_gRPC].body.id",
+                                                "isbn": "=$activity[GetBookInfo_gRPC].body.isbn",
+                                                "author": "=$activity[GetBookInfo_gRPC].body.author",
+                                                "title": "=$activity[GetBookInfo_gRPC].body.title",
+                                                "publication_year": "=$activity[GetBookInfo_gRPC].body.publication_year",
+                                                "price": "=$activity[GetBookInfo_gRPC].body.price_usd",
+                                                "rating": {
+                                                    "average_rating": "=coerce.toFloat64($activity[GetBookRating_REST].responseBody.average_rating)",
+                                                    "ratings_count": "=coerce.toInt($activity[GetBookRating_REST].responseBody.ratings_count)"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "Return_DefaultCurrency",
+                        "name": "Return_DefaultCurrency",
+                        "description": "Simple Return Activity",
+                        "activity": {
+                            "ref": "#actreturn",
+                            "settings": {
+                                "mappings": {
+                                    "data": {
+                                        "mapping": {
+                                            "Book": {
+                                                "id": "=$activity[GetBookInfo_gRPC].body.id",
+                                                "isbn": "=$activity[GetBookInfo_gRPC].body.isbn",
+                                                "author": "=$activity[GetBookInfo_gRPC].body.author",
+                                                "title": "=$activity[GetBookInfo_gRPC].body.title",
+                                                "publication_year": "=$activity[GetBookInfo_gRPC].body.publication_year",
+                                                "price": "=$activity[GetBookInfo_gRPC].body.price_usd",
+                                                "rating": {
+                                                    "average_rating": "=coerce.toFloat64($activity[GetBookRating_REST].responseBody.average_rating)",
+                                                    "ratings_count": "=coerce.toInt($activity[GetBookRating_REST].responseBody.ratings_count)"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "Return_RESTError",
+                        "name": "Return_RESTError",
+                        "description": "Simple Return Activity",
+                        "activity": {
+                            "ref": "#actreturn",
+                            "settings": {
+                                "mappings": {
+                                    "data": {
+                                        "mapping": {
+                                            "Book": {
+                                                "id": "=$activity[GetBookInfo_gRPC].body.id",
+                                                "isbn": "=$activity[GetBookInfo_gRPC].body.isbn",
+                                                "author": "=$activity[GetBookInfo_gRPC].body.author",
+                                                "title": "=$activity[GetBookInfo_gRPC].body.title",
+                                                "publication_year": "=$activity[GetBookInfo_gRPC].body.publication_year",
+                                                "price": "=$activity[GetBookInfo_gRPC].body.price_usd",
+                                                "rating": {
+                                                    "average_rating": 0,
+                                                    "ratings_count": 0
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    {
+                        "id": "Return_gRPCError",
+                        "name": "Return_gRPCError",
+                        "description": "Simple Return Activity",
+                        "activity": {
+                            "ref": "#actreturn",
+                            "settings": {
+                                "mappings": {
+                                    "data": {
+                                        "mapping": {
+                                            "Book": {
+                                                "id": 0,
+                                                "isbn": 0,
+                                                "author": "N/A",
+                                                "title": "gRPC Service Error",
+                                                "publication_year": 0,
+                                                "price": 0,
+                                                "rating": {
+                                                    "average_rating": 0,
+                                                    "ratings_count": 0
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ],
+                "metadata": {
+                    "input": [
+                        {
+                            "name": "arguments",
+                            "type": "object",
+                            "schema": {
+                                "type": "json",
+                                "value": "{\"id\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"}}"
+                            }
+                        }
+                    ],
+                    "output": [
+                        {
+                            "name": "data",
+                            "type": "object",
+                            "schema": {
+                                "type": "json",
+                                "value": "{\"Book\":{\"type\":\"object\",\"required\":[],\"properties\":{\"id\":{\"type\":\"number\"},\"isbn\":{\"type\":\"number\"},\"author\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"publication_year\":{\"type\":\"number\"},\"price\":{\"type\":\"number\"},\"rating\":{\"type\":\"object\",\"required\":[],\"properties\":{\"average_rating\":{\"type\":\"number\"},\"ratings_count\":{\"type\":\"number\"}}}}}}"
+                            }
+                        }
+                    ],
+                    "fe_metadata": {
+                        "input": "{\"type\":\"object\",\"title\":\"GraphQLTrigger\",\"properties\":{\"arguments\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"number\"},\"currency\":{\"type\":\"string\"}},\"required\":[\"id\"]}}}",
+                        "output": "{\"type\":\"object\",\"title\":\"Inputs\",\"properties\":{\"data\":{\"type\":\"object\",\"properties\":{\"Book\":{\"type\":\"object\",\"required\":[],\"properties\":{\"id\":{\"type\":\"number\"},\"isbn\":{\"type\":\"number\"},\"author\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"publication_year\":{\"type\":\"number\"},\"price\":{\"type\":\"number\"},\"rating\":{\"type\":\"object\",\"required\":[],\"properties\":{\"average_rating\":{\"type\":\"number\"},\"ratings_count\":{\"type\":\"number\"}}}}}},\"required\":[]}},\"required\":[]}"
+                    }
+                }
+            }
+        }
+    ],
+    "properties": [
+        {
+            "name": "BOOKINFO_GRPC_SERVER",
+            "type": "string",
+            "value": "34.68.148.77:80"
+        },
+        {
+            "name": "RATINGS_REST_URL",
+            "type": "string",
+            "value": "https://integration.cloud.tibcoapps.com:443/imqowdd5l4pcqacfszuof4r63fqnmwku/ratings/{bookid}"
+        },
+        {
+            "name": "CURRENCY_REST_URL",
+            "type": "string",
+            "value": "https://integration.cloud.tibcoapps.com:443/mpm3clxldiay3wncawzxacudc2p6htcy/currency"
+        }
+    ],
+    "connections": {},
+    "contrib": "W3sicmVmIjoiZ2l0LnRpYmNvLmNvbS9naXQvcHJvZHVjdC9pcGFhcy93aS1jb250cmliLmdpdC9jb250cmlidXRpb25zL0dlbmVyYWwiLCJzM2xvY2F0aW9uIjoiVGliY28vR2VuZXJhbCJ9XQ==",
+    "fe_metadata": "UEsDBAoAAAAIAIRkOFCrqSRGFQAAABMAAAAIAAAAYXBwLmpzb26rViopykxPTy1yy8kvL1ayio6tBQBQSwECFAAKAAAACACEZDhQq6kkRhUAAAATAAAACAAAAAAAAAAAAAAAAAAAAAAAYXBwLmpzb25QSwUGAAAAAAEAAQA2AAAAOwAAAAAA"
+}
